@@ -1,0 +1,268 @@
+scan network to know : 
+1.Which systems are up 
+2.What services are running on these sytems
+first online system -> second scan ports
+Nmap approaches to discover live hosts ::
+1.ARP
+2.ICMP
+3.TCP/UDP ping scan :send packets to TCP ports and UDP ports to determine live hosts
+$$two scanners :: arp-scan || masscan
+Nmap scan steps ::
+1.Enumerate targets
+2.Discover live hosts
+3.Reverse-DNS lookup
+4.scasn ports
+5.Detect version
+6.Decet OS
+7.Traceroute
+8.Scripts
+9.write output
+---------------------------------------------
+1.ARP -> same subnet as the target 
+---------------------------------------------
+$$$$$nmap will attempt to discover targets names by reverse DNS resolution
+$$$$$ to know the list hosts namp will scan before running use -> -sL
+--------------------------------------------
+ARP -> link layer
+ICMP -> network layer
+TCP -> transport layer
+UDP - > transport layer
+ARP -> sending a frame to the broadcast address on the network segment and asking the computer with a specific IP address to respond by providing its MAC (hardware) address.
+ICMP -> has many types -> ICMP PING uses TYPE 8 echo and Type 0 ECHO REPLY
+if you want to ping a system on the same subnet -> an ARP query should precede the ICMP echo
+Although TCP and UDP are transport layers, for network scanning purposes, a scanner can send a specially-crafted packet to common TCP or UDP ports to check whether the target will respond. This method is efficient, especially when ICMP Echo is blocked.
+---------------------------------------------
+different subnet -> he process is different. The device sends the packet to the default gateway (router), not to the device on the other subnet directly. The ARP process would be used to resolve the MAC address of the router (default gateway) instead. The router then routes the packet to the destination subnet, where it would perform ARP within that subnet if necessary to reach the target device.
+----------------------------------------------
+1. ARP: Resolving the MAC Address
+When a device wants to send a packet (e.g., an ICMP ping) to another device, it first needs to know the MAC address of the next hop, usually the router (default gateway) when the destination is on a different subnet.
+The sending device will issue an ARP request asking, "Who has this IP address?" The request is broadcasted within the local subnet.
+The router, which is the gateway for traffic leaving the subnet, will respond with its MAC address.
+The sender caches this MAC address in its ARP table, allowing it to send the packet to the router.
+2. ICMP: Sending the Ping
+Once the ARP process has resolved the MAC address of the router, the sender can encapsulate the ICMP echo request packet inside an IP packet.
+The IP packet is sent to the router using the router's MAC address (which was obtained via ARP).
+The router then routes the packet towards its destination, following its routing table to determine the next hop.
+3. Ping Reaches Destination
+If the destination device is on a different subnet, the packet will traverse through one or more routers until it reaches the destination subnet.
+When the packet reaches the subnet where the destination device resides, the final router will use ARP (if necessary) to determine the MAC address of the destination device.
+The ICMP echo request is then delivered to the destination device.
+4. Response Back to Sender
+The destination device replies with an ICMP echo reply.
+The process is reversed: the destination device sends the ICMP reply back through the network, using ARP to find the MAC address of its own gateway, and eventually, the response reaches the original sender.
+Complementary Roles:
+ARP handles MAC address resolution at the link layer, ensuring that packets can be delivered to the correct physical network interface within the local subnet.
+ICMP handles diagnostic and error messages at the network layer, allowing devices to communicate about issues or simply check connectivity via tools like ping.
+----------------------------------------------
+Nmap Host discovery using ARP ::::::
+1.when a privileged user tires to scan targets on a local network (Ethernet) , nmap uses ARP requests . a privileged user is root or user who belongs to sudoers and can run sudo 
+2.when a privileged user tries to scan targets
+outside the local network , nmap uses ICMP echo requests  , TCP ACK to port 80 , TCP SYN to port 443 and ICMP timestamp request 
+3.when an unprivileged user tries to scan targets outside the local network , nmap resorts to a TCP-3way handshake by sending SYN packets to ports 80 , 443 
+----------------------------------------------
+nmap -sn TARGETS -> live hosts without port scanning
+ARP scan is possible only if you are on the same subnet as the target system . on an Ethernet 802.3 and WIFI 802.11  - > you need to know the mac address of any system before you can communicate with it , the mac address is necessary for the link-layer header
+he header contains the source MAC address and the destination MAC address among other fields. To get the MAC address, the OS sends an ARP query. A host that replies to ARP queries is up. The ARP query only works if the target is on the same subnet as yourself, i.e., on the same Ethernet/WiFi. You should expect to see many ARP queries generated during a Nmap scan of a local network. If you want Nmap only to perform an ARP scan without port-scanning, you can use nmap -PR -sn TARGETS, where -PR indicates that you only want an ARP scan. The following example shows Nmap using ARP for host discovery without any port scanning. We run nmap -PR -sn MACHINE_IP/24 to discover all the live systems on the same subnet as our target machine.
+--------------------------------------------
+-PS<port><range> ----> to use TCP SYN ping
+-ps21-25     -ps21    -ps80,443,8080
+sudo nmap -> as privileged user not necessary complete 3 way handshake
+nmap -> must complete the 3way handshake
+--------------------------------------------
+Using Reverse-DNS Lookup 
+Nmap’s default behaviour is to use reverse-DNS online hosts. Because the hostnames can reveal a lot, this can be a helpful step. However, if you don’t want to send such DNS queries, you use -n to skip this step.
+
+ou can use the option -R to query the DNS server even for offline hosts. If you want to use a specific DNS server, you can add the --dns-servers DNS_SERVER option.
+--------------------------------------------
+
+
+               SUMMARRY 
+              ----------
+
+Scan Type	Example Command
+ARP Scan	sudo nmap -PR -sn MACHINE_IP/24
+ICMP Echo Scan	sudo nmap -PE -sn MACHINE_IP/24
+ICMP Timestamp Scan	sudo nmap -PP -sn MACHINE_IP/24
+ICMP Address Mask Scan	sudo nmap -PM -sn MACHINE_IP/24
+TCP SYN Ping Scan	sudo nmap -PS22,80,443 -sn MACHINE_IP/30
+TCP ACK Ping Scan	sudo nmap -PA22,80,443 -sn MACHINE_IP/30
+UDP Ping Scan	sudo nmap -PU53,161,162 -sn MACHINE_IP/30
+Remember to add -sn if you are only interested in host discovery without port-scanning. Omitting -sn will let Nmap default to port-scanning the live hosts.
+
+Option	Purpose
+-n	no DNS lookup
+-R	reverse-DNS lookup for all hosts
+-sn	host discovery only
+
+--------------------------------------
+port scanning
+1.tcp connection scan -> complete 3 way handshake , open connection -> port is open then close the connection . if the port is closed -> rst/ack instead of opening connection -> nmap -sT <ip>
+2.tcp syn scan -> sudo nmap -sS <ip> 
+no need to complete 3 way handshake once received the response tear the connection making the chance of scan logged decrease
+3.UDP scan 
+connectionless protocol, and hence it does not require any handshake for connection establishment. We cannot guarantee that a service listening on a UDP port would respond to our packets. However, if a UDP packet is sent to a closed port, an ICMP port unreachable error (type 3, code 3) is returned. You can select UDP scan using the -sU option; moreover, you can combine it with another TCP scan.
+------------------------------------------
+
+                   summary 
+                 -----------   
+Port Scan Type	Example Command
+TCP Connect Scan	nmap -sT 10.10.194.200
+TCP SYN Scan	sudo nmap -sS 10.10.194.200
+UDP Scan	sudo nmap -sU 10.10.194.200
+These scan types should get you started discovering running TCP and UDP services on a target host.
+
+Option	Purpose
+-p-	all ports
+-p1-1023	scan ports 1 to 1023
+-F	100 most common ports
+-r	scan ports in consecutive order
+-T<0-5>	-T0 being the slowest and T5 the fastest
+--max-rate 50	rate <= 50 packets/sec
+--min-rate 15	rate >= 15 packets/sec
+--min-parallelism 100	at least 100 probes in parallel
+---------------------------------------------
+  ---------------------------------------------
+what would happen if we send a TCp packet , which is not part of any ongoing TCP connection with one or more flags set 
+
+1.Null scan ::::: 
+The null scan does not set any flag all six bits are set to zero. -sN 
+A TCP packet with no flags set will not trigger any response when it reaches an open port,from Nmap’s perspective, a lack of reply in a null scan indicates that either the port is open or a firewall is blocking the packet.However, we expect the target server to respond with an RST packet if the port is closed. Consequently, we can use the lack of RST response to figure out the ports that are not closed: open or filtered.
+
+client (NULL)-> server TCP port is open 
+client (NULL)->server  server(RST/ACK)->client
+
+2.FIN Scan 
+The FIN scan sends a TCP packet with the FIN flag set. You can choose this scan type using the -sF option. Similarly, no response will be sent if the TCP port is open. Again, Nmap cannot be sure if the port is open or if a firewall is blocking the traffic related to this TCP port.
+However, the target system should respond with an RST if the port is closed. Consequently, we will be able to know which ports are closed and use this knowledge to infer the ports that are open or filtered. It's worth noting some firewalls will 'silently' drop the traffic without sending an RST.
+client (FIN)-> server port is open
+client(FIN)-> server server(RST/ACK)->client closed
+
+3.Xmas Scan
+The Xmas scan gets its name after Christmas tree lights. An Xmas scan sets the FIN, PSH, and URG flags simultaneously. You can select Xmas scan with the option -sX.
+Like the Null scan and FIN scan, if an RST packet is received, it means that the port is closed. Otherwise, it will be reported as open|filtered.
+
+client(FIN/PSH/URG)->server open
+client(FIN/PSH/URG)->server server(RST/ACK)->client
+One scenario where these three scan types can be efficient is when scanning a target behind a stateless (non-stateful) firewall. A stateless firewall will check if the incoming packet has the SYN flag set to detect a connection attempt. Using a flag combination that does not match the SYN packet makes it possible to deceive the firewall and reach the system behind it. However, a stateful firewall will practically block all such crafted packets and render this kind of scan useless.
+
+
+TCP ACK scan -sA :-
+ACK scan will send a TCP packet with the ACK flag set
+the target would respond to the ACK with RST regardless of the state of the port.
+This behaviour happens because a TCP packet with the ACK flag set should be sent only in response to a received TCP packet to acknowledge the receipt of some data, unlike our case. Hence, this scan won’t tell us whether the target port is open in a simple setup.
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$This kind of scan would be helpful if there is a firewall in front of the target. Consequently, based on which ACK packets resulted in responses, you will learn which ports were not blocked by the firewall. In other words, this type of scan is more suitable to discover firewall rule sets and configuration.
+
+
+window scan :
+Another similar scan is the TCP window scan. The TCP window scan is almost the same as the ACK scan; however, it examines the TCP Window field of the RST packets returned. On specific systems, this can reveal that the port is open. You can select this scan type with the option -sW. As shown in the figure below, we expect to get an RST packet in reply to our “uninvited” ACK packets, regardless of whether the port is open or closed.
+
+Custom Scan :
+
+
+
+
+  Spoofing and Decoys :
+In some network setups, you will be able to scan a target system using a spoofed IP address and even a spoofed MAC address. Such a scan is only beneficial in a situation where you can guarantee to capture the response. If you try to scan a target from some random network using a spoofed IP address, chances are you won’t have any response routed to you, and the scan results could be unreliable.
+
+The following figure shows the attacker launching the command nmap -S SPOOFED_IP 10.10.173.55. Consequently, Nmap will craft all the packets using the provided source IP address SPOOFED_IP. The target machine will respond to the incoming packets sending the replies to the destination IP address SPOOFED_IP. For this scan to work and give accurate results, the attacker needs to monitor the network traffic to analyze the replies.
+In brief, scanning with a spoofed IP address is three steps:
+
+Attacker sends a packet with a spoofed source IP address to the target machine.
+Target machine replies to the spoofed IP address as the destination.
+Attacker captures the replies to figure out open ports.
+
+In general, you expect to specify the network interface using -e and to explicitly disable ping scan -Pn. Therefore, instead of nmap -S SPOOFED_IP 10.10.173.55, you will need to issue nmap -e NET_INTERFACE -Pn -S SPOOFED_IP 10.10.173.55 to tell Nmap explicitly which network interface to use and not to expect to receive a ping reply. It is worth repeating that this scan will be useless if the attacker system cannot monitor the network for responses.
+When you are on the same subnet as the target machine, you would be able to spoof your MAC address as well. You can specify the source MAC address using --spoof-mac SPOOFED_MAC. This address spoofing is only possible if the attacker and the target machine are on the same Ethernet (802.3) network or same WiFi (802.11).
+Spoofing only works in a minimal number of cases where certain conditions are met. Therefore, the attacker might resort to using decoys to make it more challenging to be pinpointed. The concept is simple, make the scan appear to be coming from many IP addresses so that the attacker’s IP address would be lost among them. As we see in the figure below, the scan of the target machine will appear to be coming from 3 different sources, and consequently, the replies will go the decoys as well.
+You can launch a decoy scan by specifying a specific or random IP address after -D. For example, nmap -D 10.10.0.1,10.10.0.2,ME 10.10.173.55 will make the scan of 10.10.173.55 appear as coming from the IP addresses 10.10.0.1, 10.10.0.2, and then ME to indicate that your IP address should appear in the third order. Another example command would be nmap -D 10.10.0.1,10.10.0.2,RND,RND,ME 10.10.173.55, where the third and fourth source IP addresses are assigned randomly, while the fifth source is going to be the attacker’s IP address. In other words, each time you execute the latter command, you would expect two new random IP addresses to be the third and fourth decoy sources.
+
+
+Idls/zombie Scan : 
+Spoofing the source IP address can be a great approach to scanning stealthily. However, spoofing will only work in specific network setups. It requires you to be in a position where you can monitor the traffic. Considering these limitations, spoofing your IP address can have little use; however, we can give it an upgrade with the idle scan.
+
+The idle scan, or zombie scan, requires an idle system connected to the network that you can communicate with. Practically, Nmap will make each probe appear as if coming from the idle (zombie) host, then it will check for indicators whether the idle (zombie) host received any response to the spoofed probe. This is accomplished by checking the IP identification (IP ID) value in the IP header. You can run an idle scan using nmap -sI ZOMBIE_IP 10.10.173.55, where ZOMBIE_IP is the IP address of the idle host (zombie).
+
+The idle (zombie) scan requires the following three steps to discover whether a port is open:
+
+Trigger the idle host to respond so that you can record the current IP ID on the idle host.
+Send a SYN packet to a TCP port on the target. The packet should be spoofed to appear as if it was coming from the idle host (zombie) IP address.
+Trigger the idle machine again to respond so that you can compare the new IP ID with the one received earlier.
+Let’s explain with figures. In the figure below, we have the attacker system probing an idle machine, a multi-function printer. By sending a SYN/ACK, it responds with an RST packet containing its newly incremented IP ID.
+
+
+
+The attacker will send a SYN packet to the TCP port they want to check on the target machine in the next step. However, this packet will use the idle host (zombie) IP address as the source. Three scenarios would arise. In the first scenario, shown in the figure below, the TCP port is closed; therefore, the target machine responds to the idle host with an RST packet. The idle host does not respond; hence its IP ID is not incremented.
+
+
+
+In the second scenario, as shown below, the TCP port is open, so the target machine responds with a SYN/ACK to the idle host (zombie). The idle host responds to this unexpected packet with an RST packet, thus incrementing its IP ID.
+
+
+
+In the third scenario, the target machine does not respond at all due to firewall rules. This lack of response will lead to the same result as with the closed port; the idle host won’t increase the IP ID.
+
+For the final step, the attacker sends another SYN/ACK to the idle host. The idle host responds with an RST packet, incrementing the IP ID by one again. The attacker needs to compare the IP ID of the RST packet received in the first step with the IP ID of the RST packet received in this third step. If the difference is 1, it means the port on the target machine was closed or filtered. However, if the difference is 2, it means that the port on the target was open.
+
+It is worth repeating that this scan is called an idle scan because choosing an idle host is indispensable for the accuracy of the scan. If the “idle host” is busy, all the returned IP IDs would be useless.
+
+  
+  Port Scan Type	Example Command
+TCP Null Scan	sudo nmap -sN 10.10.173.55
+TCP FIN Scan	sudo nmap -sF 10.10.173.55
+TCP Xmas Scan	sudo nmap -sX 10.10.173.55
+TCP Maimon Scan	sudo nmap -sM 10.10.173.55
+TCP ACK Scan	sudo nmap -sA 10.10.173.55
+TCP Window Scan	sudo nmap -sW 10.10.173.55
+Custom TCP Scan	sudo nmap --scanflags URGACKPSHRSTSYNFIN 10.10.173.55
+Spoofed Source IP	sudo nmap -S SPOOFED_IP 10.10.173.55
+Spoofed MAC Address	--spoof-mac SPOOFED_MAC
+Decoy Scan	nmap -D DECOY_IP,ME 10.10.173.55
+Idle (Zombie) Scan	sudo nmap -sI ZOMBIE_IP 10.10.173.55
+Fragment IP data into 8 bytes	-f
+Fragment IP data into 16 bytes	-ff
+Option	Purpose
+--source-port PORT_NUM
+
+specify source port number
+--data-length NUM
+
+append random data to reach given length
+These scan types rely on setting TCP flags in unexpected ways to prompt ports for a reply. Null, FIN, and Xmas scan provoke a response from closed ports, while Maimon, ACK, and Window scans provoke a response from open and closed ports.
+
+Option	Purpose
+--reason	explains how Nmap made its conclusion
+-v	verbose
+-vv	very verbose
+-d	debugging
+
+
+
+  nmap -sV --version-light  <ip-address>   =====> --version-intensity LEVEL where the level ranges between 0, the lightest, and 9, the most complete. -sV --version-light has an intensity of 2, while -sV --version-all has an intensity of 9.
+-dd	more details for debugging
+
+    -O detect opertaing system
+    sudo nmap -sS -O 10.10.159.18
+    --traceroute.  ->  sudo nmap -sS --traceroute 10.10.159.18
+
+    Script Category	Description
+auth	Authentication related scripts
+broadcast	Discover hosts by sending broadcast messages
+brute	Performs brute-force password auditing against logins
+default	Default scripts, same as -sC
+discovery	Retrieve accessible information, such as database tables and DNS names
+dos	Detects servers vulnerable to Denial of Service (DoS)
+exploit	Attempts to exploit various vulnerable services
+external	Checks using a third-party service, such as Geoplugin and Virustotal
+fuzzer	Launch fuzzing attacks
+intrusive	Intrusive scripts such as brute-force attacks and exploitation
+malware	Scans for backdoors
+safe	Safe scripts that won’t crash the target
+version	Retrieve service versions
+vuln	Checks for vulnerabilities or exploit vulnerable services
+    You can also specify the script by name using --script "SCRIPT-NAME" or a pattern such as --script "ftp*", which would include ftp-brute. If you are unsure what a script does, you can open the script file with a text reader,
+    
+    such as less, or a text editor. In the case of ftp-brute, it states: “Performs brute force password auditing against FTP servers.” You have to be careful as some scripts are pretty intrusive. Moreover, some scripts might be for 
+      a specific server and, if chosen at random, will waste your time with no benefit. As usual, make sure that you are authorized to launch such tests on the target server.
+      Let’s consider a benign script, http-date, which we guess would retrieve the http server date and time, and this is indeed confirmed in its description: “Gets the date from HTTP-like services. Also, it prints how much the date differs from local time…” On the AttackBox, we execute sudo nmap -sS -n --script "http-date" 10.10.159.18 as shown 
+        in the console below.
+    
